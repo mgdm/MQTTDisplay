@@ -10,6 +10,8 @@
 #include <mosquitto.h>
 #include <libsureelec.h>
 
+#include "config.h"
+
 #ifdef __GLIBC__
 #define POSSIBLY_UNUSED __attribute__((unused))
 #else
