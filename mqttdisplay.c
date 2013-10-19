@@ -22,7 +22,7 @@ char *TOPIC = "/mqttdisplay/#";
 char *DISPLAY = "/dev/tty.SLAB_USBtoUART";
 char *BROKER = "localhost";
 long BROKER_PORT = 1883;
-long VERBOSE = 1;
+long VERBOSE = 0;
 long STOPPING = 0;
 
 static struct option OPTIONS[] = {
@@ -205,7 +205,7 @@ int main(int argc, char **argv) {
 	libsureelec_ctx *display = NULL;
 
 	while (opt != -1) {
-		opt = getopt_long(argc, argv, "b:d:p:t:", OPTIONS, &index);
+		opt = getopt_long(argc, argv, "b:d:p:t:v", OPTIONS, &index);
 
 		switch (opt) {
 			case 'b':
