@@ -26,7 +26,7 @@ long VERBOSE = 0;
 long STOPPING = 0;
 
 static struct option OPTIONS[] = {
-	{ "broker", required_argument, 0, 'b' },
+	{ "host", required_argument, 0, 'h' },
 	{ "display", required_argument, 0, 'd' },
 	{ "port", required_argument, 0, 'p' },
 	{ "topic", required_argument, 0, 't' },
@@ -172,7 +172,7 @@ static struct mosquitto *init_mosquitto(const char *broker, long port, const cha
 
 	mosquitto_lib_init();
 	client = mosquitto_new("mqttdisplay", 1, display);
-	
+
 	retval = mosquitto_connect(client, broker, port, 10);
 	handle_errno(retval, errno);
 
@@ -186,7 +186,7 @@ static struct mosquitto *init_mosquitto(const char *broker, long port, const cha
 
 static libsureelec_ctx *init_display(const char *device) {
 	libsureelec_ctx *display = libsureelec_create(device, VERBOSE);
-	
+
 	if (!display) {
 		fprintf(stderr, "Failed to initialize display");
 		exit(EXIT_FAILURE);
@@ -205,15 +205,19 @@ int main(int argc, char **argv) {
 	libsureelec_ctx *display = NULL;
 
 	while (opt != -1) {
-		opt = getopt_long(argc, argv, "b:d:p:t:v", OPTIONS, &index);
+		opt = getopt_long(argc, argv, "h:d:p:t:v", OPTIONS, &index);
 
 		switch (opt) {
-			case 'b':
+			case 'h':
 				BROKER = strdup(optarg);
 				break;
 
 			case 'd':
 				DISPLAY = strdup(optarg);
+				break;
+
+			case 't':
+				TOPIC = strdup(optarg);
 				break;
 
 			case 'p':
@@ -231,7 +235,7 @@ int main(int argc, char **argv) {
 		exit(EXIT_FAILURE);
 	}
 
-	debug_print("Starting with broker %s:%ld and display %s", 
+	debug_print("Starting with broker %s:%ld and display %s",
 			BROKER, BROKER_PORT, DISPLAY);
 
 	display = init_display(DISPLAY);
