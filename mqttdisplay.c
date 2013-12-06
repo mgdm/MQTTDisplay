@@ -149,9 +149,14 @@ static void message_callback(struct mosquitto *client, void *obj, const struct m
 	libsureelec_ctx *display = (libsureelec_ctx *) obj;
 	debug_print("Got message: %s", message->payload);
 
-	wrapped_text = wrap_text(message->payload, display->device_info.width, display->device_info.height);
-	memcpy(display->framebuffer, wrapped_text, display->device_info.width * display->device_info.height);
-	libsureelec_refresh(display);
+	if (message->payloadlen > 0) {
+		wrapped_text = wrap_text(message->payload, display->device_info.width, display->device_info.height);
+
+		memcpy(display->framebuffer, wrapped_text, display->device_info.width * display->device_info.height);
+		libsureelec_refresh(display);
+	} else {
+		libsureelec_clear_display(display);
+	}
 }
 
 static void interrupt_handler(int signal) {
