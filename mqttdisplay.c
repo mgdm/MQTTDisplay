@@ -31,6 +31,7 @@ struct md_config {
 	char *display;
 	char *broker;
 	long broker_port;
+	int foreground;
 };
 
 static struct md_config DEFAULTS = {
@@ -38,6 +39,7 @@ static struct md_config DEFAULTS = {
 	"/dev/tty.SLAB_USBtoUART",
 	"localhost",
 	1883,
+	0
 };
 
 static struct option OPTIONS[] = {
@@ -46,6 +48,7 @@ static struct option OPTIONS[] = {
 	{ "port", required_argument, 0, 'p' },
 	{ "topic", required_argument, 0, 't' },
 	{ "verbose", no_argument, 0, 'v' },
+	{ "foreground", no_argument, 0, 'f' },
 	{ 0, 0, 0, 0 }
 };
 
@@ -214,6 +217,8 @@ static int ini_handler(void *userdata, const char *section, const char *name, co
 		config->topic = strdup(value);
 	} else if (MATCH("mqttdisplay", "verbose")) {
 		VERBOSE = strtol(value, NULL, 10) ? 1 : 0;
+	} else if (MATCH("mqttdisplay", "foreground")) {
+		config->foreground = strtol(value, NULL, 10) ? 1 : 0;
 	}
 
 	return 1;
@@ -316,6 +321,13 @@ int main(int argc, char **argv) {
 
 	debug_print("Starting with broker %s:%ld, topic \"%s\", and display %s",
 			config.broker, config.broker_port, config.topic, config.display);
+
+	if (config.foreground == 0) {
+		if (daemon(0, 0) == -1) {
+			fprintf(stderr, "Failed to daemonize\n");
+			exit(EXIT_FAILURE);
+		}
+	}
 
 	display = init_display(config.display, VERBOSE);
 
