@@ -6,10 +6,13 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <signal.h>
+#include <unistd.h>
+#include <pwd.h>
 
 #include <mosquitto.h>
 #include <libsureelec.h>
 
+#include "ini.h"
 #include "config.h"
 
 #ifdef __GLIBC__
@@ -18,12 +21,24 @@
 #define POSSIBLY_UNUSED
 #endif
 
-char *TOPIC = "/mqttdisplay/#";
-char *DISPLAY = "/dev/tty.SLAB_USBtoUART";
-char *BROKER = "localhost";
-long BROKER_PORT = 1883;
-long VERBOSE = 0;
-long STOPPING = 0;
+#define INI_NAME ".mqttdisplay"
+
+int STOPPING = 0;
+int VERBOSE = 0;
+
+struct md_config {
+	char *topic;
+	char *display;
+	char *broker;
+	long broker_port;
+};
+
+static struct md_config DEFAULTS = {
+	"mqttdisplay/#",
+	"/dev/tty.SLAB_USBtoUART",
+	"localhost",
+	1883,
+};
 
 static struct option OPTIONS[] = {
 	{ "host", required_argument, 0, 'h' },
@@ -170,8 +185,8 @@ static struct mosquitto *init_mosquitto(const char *broker, long port, const cha
 	return client;
 }
 
-static libsureelec_ctx *init_display(const char *device) {
-	libsureelec_ctx *display = libsureelec_create(device, VERBOSE);
+static libsureelec_ctx *init_display(const char *device, int verbose) {
+	libsureelec_ctx *display = libsureelec_create(device, verbose);
 
 	if (!display) {
 		fprintf(stderr, "Failed to initialize display");
@@ -185,29 +200,64 @@ static libsureelec_ctx *init_display(const char *device) {
 	return display;
 }
 
-int main(int argc, char **argv) {
+static int ini_handler(void *userdata, const char *section, const char *name, const char *value) {
+	struct md_config *config = (struct md_config *) userdata;
+
+	#define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
+	if (MATCH("mqttdisplay", "broker")) {
+		config->broker = strdup(value);
+	} else if (MATCH("mqttdisplay", "port")) {
+		config->broker_port = strtol(value, NULL, 10);
+	} else if (MATCH("mqttdisplay", "display")) {
+		config->display = strdup(value);
+	} else if (MATCH("mqttdisplay", "topic")) {
+		config->topic = strdup(value);
+	} else if (MATCH("mqttdisplay", "verbose")) {
+		VERBOSE = strtol(value, NULL, 10) ? 1 : 0;
+	}
+
+	return 1;
+}
+
+static int read_config(const char *path, struct md_config *config) {
+	const char *message;
+
+	debug_print("Loading INI file %s\n", path);
+	if (access(path, R_OK) < 0) {
+		message = strerror_wrapper(errno);
+		debug_print("Could not access INI file %s: %s\n", path, message);
+		return -1;
+	}
+
+	if (ini_parse(path, ini_handler, config) < 0) {
+		debug_print("Could not parse INI file %s\n", path);
+		return 0;
+	}
+
+	return 1;
+}
+
+static int read_arguments(int argc, char **argv, struct md_config *config) {
 	int opt = 0, index = 0;
-	struct mosquitto *client = NULL;
-	libsureelec_ctx *display = NULL;
 
 	while (opt != -1) {
 		opt = getopt_long(argc, argv, "h:d:p:t:v", OPTIONS, &index);
 
 		switch (opt) {
 			case 'h':
-				BROKER = strdup(optarg);
+				config->broker = strdup(optarg);
 				break;
 
 			case 'd':
-				DISPLAY = strdup(optarg);
+				config->display = strdup(optarg);
 				break;
 
 			case 't':
-				TOPIC = strdup(optarg);
+				config->topic = strdup(optarg);
 				break;
 
 			case 'p':
-				BROKER_PORT = strtol(optarg, NULL, 10);
+				config->broker_port = strtol(optarg, NULL, 10);
 				break;
 
 			case 'v':
@@ -216,17 +266,60 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	return 1;
+}
+
+static char *get_home_directory(void) {
+	const char *dir;
+	struct passwd *pwd;
+
+	dir = getenv("HOME");
+	if (!dir) {
+		pwd = getpwuid(getuid());
+
+		if (pwd) {
+			dir = pwd->pw_dir;
+		}
+	}
+
+	return strdup(dir);
+}
+
+int main(int argc, char **argv) {
+	struct md_config config = DEFAULTS;
+	struct mosquitto *client = NULL;
+	libsureelec_ctx *display = NULL;
+	char ini_path[256];
+	char *home_dir = NULL;
+	int i;
+
+	/* We read the config before we read the CLI arguments, but do a quick
+	 * check to see if '-v' is an argument to enable verbose mode ahead of
+	 * time */
+
+	for (i = 0; i < argc; i++) {
+		if (strcmp("-v", argv[i]) == 0) {
+			VERBOSE = 1;
+		}
+	}
+
+	home_dir = get_home_directory();
+	snprintf(ini_path, sizeof(ini_path), "%s/%s", home_dir, INI_NAME);
+
+	read_config(ini_path, &config);
+	read_arguments(argc, argv, &config);
+
 	if (signal(SIGINT, interrupt_handler) == SIG_ERR) {
 		fprintf(stderr, "Failed to install signal handler\n");
 		exit(EXIT_FAILURE);
 	}
 
-	debug_print("Starting with broker %s:%ld and display %s",
-			BROKER, BROKER_PORT, DISPLAY);
+	debug_print("Starting with broker %s:%ld, topic \"%s\", and display %s",
+			config.broker, config.broker_port, config.topic, config.display);
 
-	display = init_display(DISPLAY);
+	display = init_display(config.display, VERBOSE);
 
-	client = init_mosquitto(BROKER, BROKER_PORT, TOPIC, (void *) display);
+	client = init_mosquitto(config.broker, config.broker_port, config.topic, (void *) display);
 
 	while (!STOPPING) {
 		mosquitto_loop(client, 100, 1);
