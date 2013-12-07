@@ -59,39 +59,18 @@ static char *strerror_wrapper(int err) {
 
 
 void handle_errno(int retval, int err) {
-	char *message = NULL;
+	const char *message = NULL;
 
 	switch (retval) {
 		case MOSQ_ERR_SUCCESS:
-		default:
 			return;
-
-		case MOSQ_ERR_INVAL:
-			message = strdup("Invalid input parameter");
-			break;
-
-		case MOSQ_ERR_NOMEM:
-			message = strdup("Insufficient memory");
-			break;
-
-		case MOSQ_ERR_NO_CONN:
-			message = strdup("The client is not connected to a broker");
-			break;
-
-		case MOSQ_ERR_CONN_LOST:
-			message = strdup("Connection lost");
-			break;
-
-		case MOSQ_ERR_PROTOCOL:
-			message = strdup("There was a protocol error communicating with the broker.");
-			break;
-
-		case MOSQ_ERR_PAYLOAD_SIZE:
-			message = strdup("Payload is too large");
-			break;
 
 		case MOSQ_ERR_ERRNO:
 			message = strerror_wrapper(err);
+			break;
+
+		default:
+			message = mosquitto_strerror(err);
 			break;
 	}
 
