@@ -42,6 +42,8 @@ static void debug_print(const char *format, ...) {
 		fprintf(stderr, "mqttdisplay: ");
 		vfprintf(stderr, format, ap);
 		fprintf(stderr, "\n");
+
+		va_end(ap);
 	}
 }
 
