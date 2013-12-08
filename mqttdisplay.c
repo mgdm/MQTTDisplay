@@ -38,6 +38,7 @@ extern int daemon(int, int);
 
 int STOPPING = 0;
 int VERBOSE = 0;
+int BRIGHTNESS = 128;
 
 struct md_config {
 	char *topic;
@@ -165,6 +166,8 @@ static void message_callback(struct mosquitto *client, void *obj, const struct m
 		wrapped_text = wrap_text(message->payload, display->device_info.width, display->device_info.height);
 
 		memcpy(display->framebuffer, wrapped_text, display->device_info.width * display->device_info.height);
+		BRIGHTNESS = 254;
+		alarm(10);
 		libsureelec_refresh(display);
 	} else {
 		libsureelec_clear_display(display);
@@ -176,6 +179,10 @@ static void interrupt_handler(int signal) {
 		case SIGINT:
 			debug_print("Caught signal - stopping\n");
 			STOPPING = 1;
+			break;
+		case SIGALRM:
+			debug_print("Caught alarm signal - dimming display\n");
+			BRIGHTNESS = 128;
 			break;
 		default:
 			debug_print("Caught unknown signal\n");
@@ -211,7 +218,7 @@ static libsureelec_ctx *init_display(const char *device, int verbose) {
 
 	libsureelec_clear_display(display);
 	libsureelec_set_contrast(display, 1);
-	libsureelec_set_brightness(display, 254);
+	libsureelec_set_brightness(display, 128);
 
 	return display;
 }
@@ -259,9 +266,13 @@ static int read_arguments(int argc, char **argv, struct md_config *config) {
 	int opt = 0, index = 0;
 
 	while (opt != -1) {
-		opt = getopt_long(argc, argv, "h:d:p:t:v", OPTIONS, &index);
+		opt = getopt_long(argc, argv, "h:d:p:t:vf", OPTIONS, &index);
 
 		switch (opt) {
+			case 'f':
+				config->foreground = 1;
+				break;
+
 			case 'h':
 				config->broker = strdup(optarg);
 				break;
@@ -309,7 +320,7 @@ int main(int argc, char **argv) {
 	libsureelec_ctx *display = NULL;
 	char ini_path[256];
 	char *home_dir = NULL;
-	int i;
+	int i, brightness;
 
 	/* We read the config before we read the CLI arguments, but do a quick
 	 * check to see if '-v' is an argument to enable verbose mode ahead of
@@ -332,6 +343,11 @@ int main(int argc, char **argv) {
 		exit(EXIT_FAILURE);
 	}
 
+	if (signal(SIGALRM, interrupt_handler) == SIG_ERR) {
+		fprintf(stderr, "Failed to install signal handler\n");
+		exit(EXIT_FAILURE);
+	}
+
 	debug_print("Starting with broker %s:%ld, topic \"%s\", and display %s",
 			config.broker, config.broker_port, config.topic, config.display);
 
@@ -346,7 +362,14 @@ int main(int argc, char **argv) {
 
 	client = init_mosquitto(config.broker, config.broker_port, config.topic, (void *) display);
 
+	brightness = BRIGHTNESS;
 	while (!STOPPING) {
+		printf("Brightness is %d, %d\n", brightness, BRIGHTNESS);
+		if (brightness != BRIGHTNESS) {
+			brightness = BRIGHTNESS;
+			libsureelec_set_brightness(display, BRIGHTNESS);
+		}
+
 		mosquitto_loop(client, 100, 1);
 	}
 
