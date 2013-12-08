@@ -364,7 +364,6 @@ int main(int argc, char **argv) {
 
 	brightness = BRIGHTNESS;
 	while (!STOPPING) {
-		printf("Brightness is %d, %d\n", brightness, BRIGHTNESS);
 		if (brightness != BRIGHTNESS) {
 			brightness = BRIGHTNESS;
 			libsureelec_set_brightness(display, BRIGHTNESS);
