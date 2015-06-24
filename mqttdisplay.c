@@ -170,6 +170,7 @@ static void message_callback(struct mosquitto *client, void *obj, const struct m
 		alarm(10);
 		libsureelec_refresh(display);
 	} else {
+		BRIGHTNESS = 0;
 		libsureelec_clear_display(display);
 	}
 }
@@ -182,7 +183,15 @@ static void interrupt_handler(int signal) {
 			break;
 		case SIGALRM:
 			debug_print("Caught alarm signal - dimming display\n");
-			BRIGHTNESS = 128;
+
+			if (BRIGHTNESS > 0) {
+				BRIGHTNESS = 128;
+			}
+
+			break;
+		case SIGUSR1:
+			debug_print("Caught user signal - turning display off\n");
+			BRIGHTNESS = 0;
 			break;
 		default:
 			debug_print("Caught unknown signal\n");
@@ -344,6 +353,11 @@ int main(int argc, char **argv) {
 	}
 
 	if (signal(SIGALRM, interrupt_handler) == SIG_ERR) {
+		fprintf(stderr, "Failed to install signal handler\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if (signal(SIGUSR1, interrupt_handler) == SIG_ERR) {
 		fprintf(stderr, "Failed to install signal handler\n");
 		exit(EXIT_FAILURE);
 	}
