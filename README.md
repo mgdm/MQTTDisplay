@@ -16,10 +16,12 @@ MQTT port, and defaults to 1883. DISPLAY is the display device, and defaults to
 You can store the options in a config file, which is currently hard-coded to be
 ~/.mqttdisplay. For example:
 
+```ini
 [mqttdisplay]
 broker=mqtt.example.org
 port=1883
 topic=test/example
+```
 
 ## Credits
 This code uses the INIH library for parsing the config file.
