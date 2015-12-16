@@ -14,7 +14,7 @@ MQTT port, and defaults to 1883. DISPLAY is the display device, and defaults to
 `/dev/tty.SLAB_USBtoUART`, which is correct for the CP2102 driver on Mac OS X.
 
 You can store the options in a config file, which is currently hard-coded to be
-~/.mqttdisplay. For example:
+`~/.mqttdisplay`. For example:
 
 ```ini
 [mqttdisplay]
